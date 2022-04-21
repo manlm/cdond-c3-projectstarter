@@ -249,6 +249,13 @@ jobs:
       - save_cache:
           paths: [ frontend/node_modules ]
           key: frontend-deploy
+      - destroy-environment:
+          id: "${CIRCLE_WORKFLOW_ID:0:7}"
+          when: on_fail
+      - revert-migrations:
+          id: "${CIRCLE_WORKFLOW_ID:0:7}"
+          when: on_fail
+
   deploy-backend:
     docker:
       - image: python:3.7-alpine3.11
@@ -287,7 +294,6 @@ jobs:
             apk add bash
             cp package* ./dist
             cd ..
-
       - run:
           name: Compress dist files
           command: |
@@ -308,6 +314,12 @@ jobs:
       - save_cache:
           paths: [ backend/node_modules ]
           key: backend-deploy
+      - destroy-environment:
+          id: "${CIRCLE_WORKFLOW_ID:0:7}"
+          when: on_fail
+      - revert-migrations:
+          id: "${CIRCLE_WORKFLOW_ID:0:7}"
+          when: on_fail
 
 workflows:
   default:
