@@ -249,6 +249,65 @@ jobs:
       - save_cache:
           paths: [ frontend/node_modules ]
           key: frontend-deploy
+  deploy-backend:
+    docker:
+      - image: python:3.7-alpine3.11
+    steps:
+      - checkout
+      - restore_cache:
+          keys: [ backend-deploy ]
+      - add_ssh_keys:
+          fingerprints: [ "c5:85:b3:50:0c:12:b5:ac:60:db:91:10:13:fd:61:67:5e:bb:fe:72" ]
+      - attach_workspace:
+          at: ~/
+      - run:
+          name: Set env
+          command: |
+            echo ENVIROMENT= production > "backend/.env"
+            echo TYPEORM_CONNECTION=$TYPEORM_CONNECTION >> "backend/.env"
+            echo TYPEORM_MIGRATIONS_DIR=$TYPEORM_MIGRATIONS_DIR >> "backend/.env"
+            echo TYPEORM_ENTITIES=$TYPEORM_ENTITIES >> "backend/.env"
+            echo TYPEORM_MIGRATIONS=$TYPEORM_MIGRATIONS >> "backend/.env"
+            echo TYPEORM_HOST=$TYPEORM_HOST >> "backend/.env"
+            echo TYPEORM_PORT=$TYPEORM_PORT >> "backend/.env"
+            echo TYPEORM_USERNAME=$TYPEORM_USERNAME >> "backend/.env"
+            echo TYPEORM_PASSWORD=$TYPEORM_PASSWORD >> "backend/.env"
+            echo TYPEORM_DATABASE=$TYPEORM_DATABASE >> "backend/.env"
+      - run:
+          name: Install dependencies
+          command: |
+            apk add --update ansible nodejs npm tar gzip
+            pip install awscli
+      - run:
+          name: Build backend files
+          command: |
+            cd backend
+            npm i
+            npm run build
+            apk add bash
+            cp package* ./dist
+            cd ..
+
+      - run:
+          name: Compress dist files
+          command: |
+            tar -C backend -czvf artifact.tar.gz .
+            pwd
+            cd .circleci/ansible
+      - run:
+          name: Deploy backend
+          command: |
+            echo "Contents of the inventory.txt file is -------"
+            cat backend/.env
+            echo "[web]" >> backend/inventory.txt
+            aws ec2 describe-instances \
+              --filters Name=tag:Name,Values="backend-${CIRCLE_WORKFLOW_ID:0:7}" \
+              --query 'Reservations[*].Instances[*].PublicIpAddress' \
+              --output text >> .circleci/ansible//inventory.txt
+            ansible-playbook -i .circleci/ansible/inventory.txt .circleci/ansible/deploy-backend.yml
+      - save_cache:
+          paths: [ backend/node_modules ]
+          key: backend-deploy
 
 workflows:
   default:
